@@ -8865,9 +8865,9 @@ void RuleOllvmBcf::getOpList(vector<uint4> &oplist) const
   oplist.push_back(CPUI_INT_AND);
 }
 
-// \brief match opaque predicate of the form
-//
-//  bVar3 = (iRam000000000061a3dc * (iRam000000000061a3dc + -1) & 1U) == 0;
+#include <iostream>
+
+// \brief match opaque predicate of the form (a * (a + -1) & 1U)
 //
 // Corresponding PCODE looks like:
 //
@@ -8877,41 +8877,83 @@ void RuleOllvmBcf::getOpList(vector<uint4> &oplist) const
 //
 // EDX is always 0
 //
+// Variables used in implementation:
+//
+// tmp2 = a - 1
+// tmp1 = a * tmp2
+// out1 = tmp1 & 1
+//
 // https://github.com/obfuscator-llvm/obfuscator/blob/llvm-4.0/lib/Transforms/Obfuscation/BogusControlFlow.cpp
 int4 RuleOllvmBcf::applyOp(PcodeOp *op, Funcdata &data)
 
 {
   // TODO: test against multiple architectures
-  // TODO: handle swapped ops (constant on LHS, etc)
 
-  // match EDX & 0x1
-  if (!op->getIn(1)->isConstant() || op->getIn(1)->getOffset() != 1 ||
-      op->getIn(1)->getSize() != 4)
+  auto check_constant = [](Varnode *vn, uintb c) {
+    return vn->isConstant() && vn->getOffset() == c;
+  };
+
+  auto check_def_op = [](Varnode *vn, int op) -> bool {
+    PcodeOp *op_ = vn->getDef();
+    if (op_ == nullptr)
+      return 0;
+    return op_->code() == op;
+  };
+
+  // match tmp1 & 1
+  Varnode *tmp1 = nullptr;
+  if (check_constant(op->getIn(1), 1))
+    tmp1 = op->getIn(0);
+  else if (check_constant(op->getIn(0), 1))
+    tmp1 = op->getIn(1);
+  else
     return 0;
 
-  // match var * EDI
-  auto op_mul = op->getIn(0)->getDef();
-  if ((op_mul->code() != CPUI_INT_MULT))
+  // match a * tmp2
+  PcodeOp *mul_op = tmp1->getDef();
+  if (mul_op == nullptr)
+    return 0;
+  if (mul_op->code() != CPUI_INT_MULT)
+    return 0;
+  PcodeOp *sub_op = nullptr;
+  Varnode *a1 = nullptr;
+  if (check_def_op(mul_op->getIn(0), CPUI_INT_ADD) ||
+      check_def_op(mul_op->getIn(0), CPUI_INT_SUB)) {
+    sub_op = mul_op->getIn(0)->getDef();
+    a1 = mul_op->getIn(1);
+  } else if (check_def_op(mul_op->getIn(1), CPUI_INT_ADD) ||
+             check_def_op(mul_op->getIn(1), CPUI_INT_SUB)) {
+    sub_op = mul_op->getIn(1)->getDef();
+    a1 = mul_op->getIn(0);
+  } else
     return 0;
 
-  // match var - 1
-  auto var1 = op_mul->getIn(0);
-  auto op_sub = op_mul->getIn(1)->getDef();
-  if (op_sub->code() != CPUI_INT_ADD)
-    return 0;
-  if (!op_sub->getIn(1)->isConstant() ||
-      op_sub->getIn(1)->getOffset() != 0xffffffff ||
-      op_sub->getIn(1)->getSize() != 4)
-    return 0;
+  Varnode *a2 = nullptr;
+  if (sub_op->code() == CPUI_INT_ADD) {
+    // match (a + -1) or (-1 + a)
+    if (check_constant(sub_op->getIn(0), 0xffffffff))
+      a2 = sub_op->getIn(1);
+    else if (check_constant(sub_op->getIn(1), 0xffffffff))
+      a2 = sub_op->getIn(0);
+    else
+      return 0;
+  } else if (sub_op->code() == CPUI_INT_SUB) {
+    // match (a - 1)
+    if (check_constant(sub_op->getIn(1), 1)) {
+      a2 = sub_op->getIn(0);
+    } else
+      return 0;
+  } else
+    return 0; // unreachable
 
-  // verify both vars are the same
+  // verify a1 and a2 are structurally equivalent
   Varnode *buf1[2];
   Varnode *buf2[2];
-  if (0 != functionalEqualityLevel(var1, op_sub->getIn(0), buf1, buf2))
+  if (0 != functionalEqualityLevel(a1, a2, buf1, buf2))
     return 0;
 
-  // matched the opaque predicate; eliminate this op and replace all uses of
-  // output w/ constant
+  // matched the opaque predicate
+  // eliminate this op and replace all uses of output w/ constant
   data.totalReplace(op->getOut(), data.newConstant(op->getOut()->getSize(), 0));
   data.opDestroy(op);
 
