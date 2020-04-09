@@ -8876,9 +8876,14 @@ void RuleOllvmBcf::getOpList(vector<uint4> &oplist) const
 // 0x0040ec21:17e:     EDX(0x0040ec21:17e) = EDX(0x0040ec1e:173) & #0x1:4
 //
 // EDX is always 0
+//
+// https://github.com/obfuscator-llvm/obfuscator/blob/llvm-4.0/lib/Transforms/Obfuscation/BogusControlFlow.cpp
 int4 RuleOllvmBcf::applyOp(PcodeOp *op, Funcdata &data)
 
 {
+  // TODO: test against multiple architectures
+  // TODO: handle swapped ops (constant on LHS, etc)
+
   // match EDX & 0x1
   if (!op->getIn(1)->isConstant() || op->getIn(1)->getOffset() != 1 ||
       op->getIn(1)->getSize() != 4)
