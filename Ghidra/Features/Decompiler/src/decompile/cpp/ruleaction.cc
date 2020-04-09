@@ -8858,3 +8858,58 @@ int4 RulePiecePathology::applyOp(PcodeOp *op,Funcdata &data)
   return tracePathologyForward(op, data);
 }
 
+
+void RuleOllvmBcf::getOpList(vector<uint4> &oplist) const
+
+{
+  oplist.push_back(CPUI_INT_AND);
+}
+
+// \brief match opaque predicate of the form
+//
+//  bVar3 = (iRam000000000061a3dc * (iRam000000000061a3dc + -1) & 1U) == 0;
+//
+// Corresponding PCODE looks like:
+//
+// 0x0040ec1c:16b:     EDI(0x0040ec1c:16b) = r0x0061a3dc:4(i) + #0xffffffff:4
+// 0x0040ec1e:173:     EDX(0x0040ec1e:173) = r0x0061a3dc:4(i) * EDI(0x0040ec1c:16b)
+// 0x0040ec21:17e:     EDX(0x0040ec21:17e) = EDX(0x0040ec1e:173) & #0x1:4
+//
+// EDX is always 0
+int4 RuleOllvmBcf::applyOp(PcodeOp *op, Funcdata &data)
+
+{
+  // match EDX & 0x1
+  if (!op->getIn(1)->isConstant() || op->getIn(1)->getOffset() != 1 ||
+      op->getIn(1)->getSize() != 4)
+    return 0;
+
+  // match var * EDI
+  auto op_mul = op->getIn(0)->getDef();
+  if ((op_mul->code() != CPUI_INT_MULT))
+    return 0;
+
+  // match var - 1
+  auto var1 = op_mul->getIn(0);
+  auto op_sub = op_mul->getIn(1)->getDef();
+  if (op_sub->code() != CPUI_INT_ADD)
+    return 0;
+  if (!op_sub->getIn(1)->isConstant() ||
+      op_sub->getIn(1)->getOffset() != 0xffffffff ||
+      op_sub->getIn(1)->getSize() != 4)
+    return 0;
+
+  // verify both vars are the same
+  Varnode *buf1[2];
+  Varnode *buf2[2];
+  if (0 != functionalEqualityLevel(var1, op_sub->getIn(0), buf1, buf2))
+    return 0;
+
+  // matched the opaque predicate; eliminate this op and replace all uses of
+  // output w/ constant
+  data.totalReplace(op->getOut(), data.newConstant(op->getOut()->getSize(), 0));
+  data.opDestroy(op);
+
+  return 1;
+}
+

@@ -4932,6 +4932,7 @@ void universal_action(Architecture *conf)
 	actprop->addRule( new RulePtrsubUndo("typerecovery") );
 	actprop->addRule( new RuleSegment("segment") );
 	actprop->addRule( new RulePiecePathology("protorecovery") );
+	actprop->addRule( new RuleOllvmBcf("analysis") ); // XXX: maybe add deobfuscation action
 
 	actprop->addRule( new RuleDoubleLoad("doubleload") );
 	actprop->addRule( new RuleDoubleIn("doubleprecis") );
