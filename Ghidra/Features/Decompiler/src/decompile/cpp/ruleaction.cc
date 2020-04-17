@@ -8889,10 +8889,6 @@ int4 RuleOllvmBcf::applyOp(PcodeOp *op, Funcdata &data)
 {
   // TODO: test against multiple architectures
 
-  auto check_constant = [](Varnode *vn, uintb c) {
-    return vn->isConstant() && vn->getOffset() == c;
-  };
-
   auto check_def_op = [](Varnode *vn, int op) -> bool {
     PcodeOp *op_ = vn->getDef();
     if (op_ == nullptr)
@@ -8902,9 +8898,9 @@ int4 RuleOllvmBcf::applyOp(PcodeOp *op, Funcdata &data)
 
   // match tmp1 & 1
   Varnode *tmp1 = nullptr;
-  if (check_constant(op->getIn(1), 1))
+  if (op->getIn(1)->constantMatch(1))
     tmp1 = op->getIn(0);
-  else if (check_constant(op->getIn(0), 1))
+  else if (op->getIn(0)->constantMatch(1))
     tmp1 = op->getIn(1);
   else
     return 0;
@@ -8931,15 +8927,15 @@ int4 RuleOllvmBcf::applyOp(PcodeOp *op, Funcdata &data)
   Varnode *a2 = nullptr;
   if (sub_op->code() == CPUI_INT_ADD) {
     // match (a + -1) or (-1 + a)
-    if (check_constant(sub_op->getIn(0), 0xffffffff))
+    if (sub_op->getIn(0)->constantMatch(0xffffffff))
       a2 = sub_op->getIn(1);
-    else if (check_constant(sub_op->getIn(1), 0xffffffff))
+    else if (sub_op->getIn(1)->constantMatch(0xffffffff))
       a2 = sub_op->getIn(0);
     else
       return 0;
   } else if (sub_op->code() == CPUI_INT_SUB) {
     // match (a - 1)
-    if (check_constant(sub_op->getIn(1), 1)) {
+    if (sub_op->getIn(1)->constantMatch(1)) {
       a2 = sub_op->getIn(0);
     } else
       return 0;
