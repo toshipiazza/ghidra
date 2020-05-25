@@ -26,30 +26,27 @@ define space mem type=ram_space size=2 wordsize=1;
 
 # Using decimal rather than hex to match specs
 # TODO: These general purpose registers should reside with the 'mem' space from 0x00-0x1f
-#define register offset=0 size=1 [
-define mem offset=0 size=1 [
+define register offset=0 size=1 [
+#define mem offset=0 size=1 [
 	R0  R1  R2  R3  R4  R5  R6  R7  R8  R9
 	R10 R11 R12 R13 R14 R15 R16 R17 R18 R19
 	R20 R21 R22 R23 Wlo Whi Xlo Xhi Ylo Yhi
 	Zlo Zhi
 ];
 
-#define register offset=0 size=2 [
-define mem offset=0 size=2 [
+define register offset=0 size=2 [
+#define mem offset=0 size=2 [
 	R1R0   R3R2   R5R4   R7R6   R9R8
 	R11R10 R13R12 R15R14 R17R16 R19R18
 	R21R20 R23R22 W # Technically, manual has R25R24 instead of W.
 	X      Y      Z
 ];
 
-#define register offset=0x10 size=4 [
-define mem offset=0x10 size=4 [
+define register offset=0x10 size=4 [
+#define mem offset=0x10 size=4 [
 	R19R18R17R16 R23R22R21R20
 ];
 
-# Techinically, the stack pointer is in the i/o space so should be addressable with the
-# rest of the i/o registers. However, Ghidra does not react well to the stack pointer
-# being indirectly addressable so we're making an exception.
 define register offset=0x3D size=1 [ SPL SPH ];
 define register offset=0x3D size=2 [ SP ];
 
